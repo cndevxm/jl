@@ -2,6 +2,8 @@ package com.cndevxm.concurrent.lock.sync;
 
 import org.openjdk.jol.info.ClassLayout;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -37,18 +39,17 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * 验证条件：
  * 1、关闭指针压缩，-XX:-UseCompressedOops
+ * <p>
+ * 验证结果：
  */
 
 public class ObjectHeader {
-
-    private String code;
 
     public static void main(String[] args) throws InterruptedException {
 
         // 虚拟机启动后，前四秒生成的对象为无锁状态，如果发生了资源竞争则直接升级到轻量级锁
         ObjectHeader a = new ObjectHeader();
         System.out.println(ClassLayout.parseInstance(a).toPrintable()); // 无锁状态
-        System.out.println(a.hashCode());
 
         System.out.println("↑↑↑当前锁对象为无锁状态（non-biasable），触发锁竞争，直接升级为轻量级锁（thin lock）");
 
@@ -64,23 +65,34 @@ public class ObjectHeader {
         ObjectHeader b = new ObjectHeader();
         System.out.println(ClassLayout.parseInstance(b).toPrintable()); // 匿名偏向锁状态
 
-        System.out.println("↑↑↑当前锁对象为匿名偏向锁状态（biasable），创建子线程竞争锁资源，直接升级为偏向锁（biased）");
+        System.out.println("↑↑↑当前锁对象为匿名偏向锁状态（biasable），创建子线程竞争锁资源，直接升级为偏向锁（biased），如果计算了对象的hashcode则直接升级为轻量级锁（thin lock）");
 
         Thread aThread = new Thread(new CustomThread(b));
         aThread.start();
         aThread.join();
         System.out.println(ClassLayout.parseInstance(b).toPrintable()); // 偏向锁状态
-        System.out.println(aThread.isAlive());
 
-        System.out.println("↑↑↑当前锁对象为偏向锁状态（biased），当创建子线程竞争锁资源时，则偏向锁（biased）状态不变，偏向线程id也未变；当主线程竞争锁资源时，则锁对象升级为轻量级锁（），很奇怪");
-        synchronized (b) {
-            System.out.println(ClassLayout.parseInstance(b).toPrintable()); // 轻量级锁状态
-        }
+        System.out.println("↑↑↑当前锁对象为偏向锁状态（biased），当创建子线程竞争锁资源时，则偏向锁（biased）状态不变，偏向线程id也未变；当主线程竞争锁资源时，则锁对象升级为轻量级锁（thin lock），很奇怪！！！");
 //        Thread bThread = new Thread(new CustomThread(b));
 //        bThread.start();
 //        bThread.join();
+//        TimeUnit.SECONDS.sleep(10); // 会有一定几率出现无锁状态（non-biasable），怀疑是JVM的延迟
 //        System.out.println(ClassLayout.parseInstance(b).toPrintable()); // 偏向锁状态
 
+        synchronized (b) {
+            System.out.println(ClassLayout.parseInstance(b).toPrintable()); // 轻量级锁状态
+        }
+        System.out.println("增强竞争锁资源，锁对象升级为重量级锁（fat lock）");
+        List<Thread> threadList = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            Thread t = new Thread(new CustomThread(b));
+            t.start();
+            threadList.add(t);
+        }
+        for (Thread thread : threadList) {
+            thread.join();
+        }
+        System.out.println(ClassLayout.parseInstance(b).toPrintable()); // 重量级锁状态
     }
 
     static class CustomThread implements Runnable {
@@ -93,10 +105,8 @@ public class ObjectHeader {
 
         @Override
         public void run() {
-
             synchronized (objectHeader) {
                 try {
-                    System.out.println(objectHeader.hashCode());
                     TimeUnit.SECONDS.sleep(3);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -104,6 +114,4 @@ public class ObjectHeader {
             }
         }
     }
-
-
 }
