@@ -7,6 +7,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * 通过Lock实现线程安全的数字相加
+ */
 public class LockCheck {
 
     private static Lock lock = new ReentrantLock();
@@ -16,10 +19,9 @@ public class LockCheck {
 
     public static void main(String[] args) throws InterruptedException {
 
-        LockCheck lockCheck = new LockCheck();
         List<Thread> threadList = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
-            Thread t = new Thread(lockCheck.new LockCheckThread(i * 10, countMap));
+            Thread t = new Thread(new LockCheckThread(i * 10, countMap));
             t.setName(String.valueOf(i));
             t.start();
             threadList.add(t);
@@ -30,8 +32,8 @@ public class LockCheck {
         System.out.println("count的值为：" + countMap.get("count"));
     }
 
-    // 成员内部类
-    private class LockCheckThread implements Runnable {
+    // 静态内部类
+    private static class LockCheckThread implements Runnable {
 
         private int cycles; // 循环次数
         private Map<String, Integer> countMap;
