@@ -66,7 +66,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         }
 
         /**
-         * 尝试释放锁的逻辑
+         * 尝试发布锁，state-1，如果计算后state=0则将独占线程置为null
          *
          * @param releases
          * @return
