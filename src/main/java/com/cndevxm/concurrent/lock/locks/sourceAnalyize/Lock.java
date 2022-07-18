@@ -1,4 +1,4 @@
-package com.cndevxm.concurrent.lock.locks.scenarios;
+package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
 
 import java.util.concurrent.TimeUnit;
 

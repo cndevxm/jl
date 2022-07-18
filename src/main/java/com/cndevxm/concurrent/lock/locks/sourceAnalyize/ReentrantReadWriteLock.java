@@ -33,7 +33,7 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-package com.cndevxm.concurrent.lock.locks.scenarios;
+package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
 
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;

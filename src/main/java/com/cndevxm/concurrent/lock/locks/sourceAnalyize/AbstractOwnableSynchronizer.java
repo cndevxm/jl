@@ -1,4 +1,4 @@
-package com.cndevxm.concurrent.lock.locks.scenarios;
+package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
 
 /**
  * 独占模式相关接口

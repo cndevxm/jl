@@ -1,4 +1,4 @@
-package com.cndevxm.concurrent.lock.locks;
+package com.cndevxm.concurrent.lock.locks.locksupport;
 
 import lombok.SneakyThrows;
 
@@ -6,9 +6,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * 验证通过LockSupport来完成线程挂起与唤醒
+ * 验证通过LockSupport来实现生产这与消费者模型
  */
-public class LockSupportCheck {
+public class LockSupportPCCheck {
 
     @SneakyThrows
     public static void main(String[] args) {
@@ -21,7 +21,7 @@ public class LockSupportCheck {
         System.out.println("已执行unpark");
         thread.join();
     }
-    
+
     // 静态内部类
     private static class LockSupportCheckThread implements Runnable {
 
