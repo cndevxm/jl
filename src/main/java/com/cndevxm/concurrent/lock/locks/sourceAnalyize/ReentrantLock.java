@@ -33,9 +33,9 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         abstract void lock();
 
         /**
-         * 非公平同步器快速获取锁的逻辑，实际上包含了获取锁、重入锁的逻辑
-         * 1、state=0时尝试获取锁
-         * 2、重入
+         * 非公平锁获取锁的逻辑
+         * 1、如果锁未被别的线程获取则获取锁
+         * 2、如果锁已被自己线程获取则state+1
          *
          * @param acquires 固定为1
          * @return 获取锁的结果
@@ -52,7 +52,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
                     setExclusiveOwnerThread(current);
                     return true;
                 }
-            } else if (current == getExclusiveOwnerThread()) {  // 如果当前线程就是独占线程，说明这是重入或者释放锁
+            } else if (current == getExclusiveOwnerThread()) {  // 如果当前线程就是独占线程，说明这是重入
                 // +1
                 int nextc = c + acquires;
                 if (nextc < 0) // 计算的结果小于0肯定是错误的，最小为0
@@ -140,7 +140,8 @@ public class ReentrantLock implements Lock, java.io.Serializable {
 
         /**
          * 以非公平的方式尝试获取锁
-         * 公平锁与非公平锁的区别为，是否在入队列之前尝试获取锁
+         * 公平锁与非公平锁的区别为，我先尝试获取锁，如果获取到锁我就不添加到同步队列里边，直接执行
+         * 公平锁，我获取锁时先判断是不是有节点在等待，如果有节点在等待，我只能添加到同步队列里边
          */
         final void lock() {
 

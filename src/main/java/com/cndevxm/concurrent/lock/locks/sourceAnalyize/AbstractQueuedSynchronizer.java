@@ -18,15 +18,15 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     }
 
     /**
-     * 如果pred状态为-1时返回true
+     * 如果pred状态为SIGNAL时返回true
      * 如果pred状态为1时剔除同步队列
-     * 如果pred状态为0或者PROPAGATE修改为SIGNAL
+     * 如果pred状态为CONDITION修改为SIGNAL
      */
     private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
 
         int ws = pred.waitStatus;
 
-        // 节点状态为等待唤醒
+        // 如果前驱节点的状态的SIGNAL，说明有节点在等待，我们可以安心的挂起，因为它总是比我们先获取锁，它释放锁的时候会唤醒我们的
         if (ws == Node.SIGNAL)
             return true;
 
@@ -37,7 +37,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
             } while (pred.waitStatus > 0);
             pred.next = node;
         } else {
-            // 将剩余节点状态置为SIGNAL
+            // 将前驱节点设置为SIGNAL
             compareAndSetWaitStatus(pred, ws, Node.SIGNAL);
         }
         return false;
@@ -90,8 +90,8 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     static final long spinForTimeoutThreshold = 1000L;
 
     /**
-     * 死循环，将节点添加到同步队列尾部
-     * 1、如果同步队列未初始化则使用CAS先初始化同步队列
+     * 轮询将节点添加到同步队列尾部
+     * 1、如果同步队列未初始化则先初始化
      * 2、使用CAS将节点添加到同步队列尾部
      */
     private Node enq(final Node node) {
@@ -111,14 +111,14 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     }
 
     /**
-     * 将当前线程封装成节点，并利用CAS添加到同步队列尾部
+     * 将当前线程封装成节点（waitStatus=0），并通过CAS尝试将节点添加到同步队列尾部
      */
     private Node addWaiter(Node mode) {
 
         // 初始化节点，此时节点的waitStatus=0
         Node node = new Node(Thread.currentThread(), mode);
 
-        // 如果同步队列已经初始化，则尝试将节点添加到队列尾部，这一步不是必须的，只是为了提高性能
+        // 快速尝试添加到同步队列尾部
         Node pred = tail;
         if (pred != null) {
             node.prev = pred;
@@ -128,7 +128,8 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
             }
         }
 
-        // 将节点添加到同步队列尾部，如果同步队列未初始化则先进行初始化
+        // 轮询将节点添加到同步队列尾部，如果同步队列未初始化则先进行初始化
+        // 这一步的目的是一定要将新创建的节点添加到同步队列尾部
         enq(node);
         return node;
     }
@@ -167,7 +168,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                     s = t;
         }
 
-        // 唤醒当前节点的后一个节点的线程
+        // 唤醒离当前节点最近的非取消状态的节点
         if (s != null)
             LockSupport.unpark(s.thread);
     }
@@ -242,12 +243,11 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     }
 
     /**
-     * 取消获取锁，顺便剔除此节点前边的CANCELLED状态的节点
+     * 取消获取锁，只有节点在等待时异常才会到这里，这里会尝试将节点删除，也有可能失败，失败的话交给该节点在后续节点来删除它
      * 1、如果节点为null，则直接返回
-     * 2、剔除当前节点前边的CANCELLED状态的节点，并将当前节点状态置为CANCELLED（必成功）
+     * 2、剔除当前节点前边的CANCELLED状态的节点，并将当前节点状态置为CANCELLED（必执行）
      * 3.1、如果节点为尾节点，尝试从队列中删除此节点
      * 3.2、如果节点为中间节点且不是队列的第二个节点且前驱节点与后驱节点的状态都可为SIGNAL则尝试剔除自己
-     * 3.3、如果节点为头节点，则唤醒头节点后继节点的线程，让其删除自己
      */
     private void cancelAcquire(Node node) {
 
@@ -257,11 +257,12 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
 
         node.thread = null;
 
-        // 剔除此节点前边的CANCELLED节点
+        // 剔除此节点前边的CANCELLED节点，所以说此节点不可能为head节点，不然会报空指针异常
         Node pred = node.prev;
         while (pred.waitStatus > 0)
             node.prev = pred = pred.prev;
 
+        // 将节点状态改为CANCELLED
         Node predNext = pred.next;
         node.waitStatus = Node.CANCELLED;
 
@@ -276,7 +277,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                 if (next != null && next.waitStatus <= 0)
                     compareAndSetNext(pred, predNext, next);
             } else {
-                // 唤醒当前节点的后一个节点的线程
+                // 唤醒当前节点的后一个节点，
                 unparkSuccessor(node);
             }
             node.next = node; // help GC
@@ -284,9 +285,9 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     }
 
     /**
-     * 死循环，当排到第二位时尝试获取锁，获取失败或者未排到第二位时则挂起
-     * 每次唤醒时判断自己是否被中断
-     * 此过程出现异常时，则取消获取
+     * 轮询，当节点排到队列第二位时尝试获取锁，未排到队列第二位或者获取锁失败时则挂起线程
+     * 最终获取成功时将节点置为头节点，此时waitStatus=1，并抛出在等待获取锁的过程中是否收到线程中断
+     * 如果在等待获取锁的过程中出现了异常则取消获取锁
      */
     final boolean acquireQueued(final Node node, int arg) {
 
@@ -305,17 +306,17 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                     return interrupted;
                 }
 
-                // 将CANCELLED节点删除，有可能是头节点（头节点异常）
-                // 将非SIGNAL状态的节点改成SIGNAL状态直到检测到节点状态为SIGNAL
-                // 挂起线程并等待唤醒，唤醒后检测中断状态
+                // 这里节点完成了两件事
+                // 1、剔除队列中此节点前边的CANCELLED状态的节点直到找到没有结束状态的节点
+                // 2、将前驱节点的状态改为SIGNAL并在下一个循环里边将自己挂起
                 if (shouldParkAfterFailedAcquire(p, node) && parkAndCheckInterrupt())
 
-                    // 线程已被中断
+                    // 只有线程挂起期间收到线程中断信号，才会设置此flag
                     interrupted = true;
             }
         } finally {
 
-            // 如果线程节点出现了异常，则取消获取
+            // 如果节点等在获取锁的过程中出现了异常，则取消获取锁
             if (failed)
                 cancelAcquire(node);
         }
@@ -344,9 +345,9 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
      * 第二步尝试获取锁失败后，将线程添加到同步队列，这一步交给AQS来完成
      */
     public final void acquire(int arg) {
-        if (!tryAcquire(arg)    // 尝试获取锁，由子类来实现
+        if (!tryAcquire(arg)    // 尝试获取锁，获取成功则直接跳出
                 &&
-                acquireQueued(addWaiter(Node.EXCLUSIVE), arg))  // 获取锁失败后，将线程添加到同步队列，并挂起，唤醒后返回中断状态
+                acquireQueued(addWaiter(Node.EXCLUSIVE), arg))  // 尝试获取锁失败后，将线程添加到同步队列，并挂起，等待前驱节点唤醒
 
             // 如果线程在获取锁的挂起时间内出现了中断，则在这里触发中断
             selfInterrupt();
@@ -949,7 +950,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         static final Node EXCLUSIVE = null;
 
         /**
-         * 节点状态:取消执行，此节点的线程被中断或者超时
+         * 节点状态:结束状态
          */
         static final int CANCELLED = 1;
         /**
@@ -957,11 +958,11 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
          */
         static final int SIGNAL = -1;
         /**
-         * 节点状态:代表当前线程是从等待队列转移过来的线程
+         * 节点状态:Condition条件状态
          */
         static final int CONDITION = -2;
         /**
-         * 节点状态:共享模式下的线程
+         * 节点状态:在共享模式中使用表示获得的同步状态会被传播
          */
         static final int PROPAGATE = -3;
 
@@ -986,7 +987,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         volatile Thread thread;
 
         /**
-         * 当前节点的下一个等待节点
+         * 等待队列中的后继结点
          */
         Node nextWaiter;
 
