@@ -53,7 +53,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
                     return true;
                 }
             } else if (current == getExclusiveOwnerThread()) {  // 如果当前线程就是独占线程，说明这是重入或者释放锁
-                // +1或者-1
+                // +1
                 int nextc = c + acquires;
                 if (nextc < 0) // 计算的结果小于0肯定是错误的，最小为0
                     throw new Error("Maximum lock count exceeded");
