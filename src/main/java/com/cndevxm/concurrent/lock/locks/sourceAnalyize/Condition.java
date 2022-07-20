@@ -4,7 +4,7 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Condition接口，定义睡眠与唤醒操作
+ * Condition接口，独占锁模式下使用
  */
 public interface Condition {
 
@@ -19,27 +19,27 @@ public interface Condition {
     void awaitUninterruptibly();
 
     /**
-     * 将当前线程添加到等待队列中，并等待纳秒级时间，指定时间过后线程将被唤醒，此过程可被中断
+     * 将当前线程添加到等待队列中，并等待纳秒级时间，指定时间过后将被移入到到同步队列，此过程可被中断
      */
     long awaitNanos(long nanosTimeout) throws InterruptedException;
 
     /**
-     * 将当前线程添加到等待队列中，并等待指定时间，指定时间过后线程将被唤醒，此过程可被中断
+     * 将当前线程添加到等待队列中，并等待指定时间，指定时间过后将被移入到到同步队列，此过程可被中断
      */
     boolean await(long time, TimeUnit unit) throws InterruptedException;
 
     /**
-     * 将当前线程添加到等待队列中，并等待至指定时间，指定时间过后线程将被唤醒，此过程可被中断
+     * 将当前线程添加到等待队列中，并等待至指定时间，指定时间过后将被移入到到同步队列，此过程可被中断
      */
     boolean awaitUntil(Date deadline) throws InterruptedException;
 
     /**
-     * 唤醒等待队列中的一个线程
+     * 将等待队列中的一个节点添加到同步队列中
      */
     void signal();
 
     /**
-     * 唤醒等待队列中的全部线程
+     * 将等待队列中的全部节点添加到同步队列中
      */
     void signalAll();
 }

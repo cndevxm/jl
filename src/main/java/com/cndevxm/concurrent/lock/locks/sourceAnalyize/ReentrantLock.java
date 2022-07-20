@@ -7,7 +7,6 @@ import java.util.concurrent.TimeUnit;
  * 独占锁
  */
 public class ReentrantLock implements Lock, java.io.Serializable {
-
     private static final long serialVersionUID = 7373984872572414699L;
     /**
      * Synchronizer providing all implementation mechanics
@@ -15,30 +14,155 @@ public class ReentrantLock implements Lock, java.io.Serializable {
     private final Sync sync;
 
     /**
-     * 获取锁
+     * 实例化可重入锁，并指定为非公平模式
+     */
+    public ReentrantLock() {
+        sync = new NonfairSync();
+    }
+
+    /**
+     * 实例化可重入锁，并设定公平模式
+     */
+    public ReentrantLock(boolean fair) {
+        sync = fair ? new FairSync() : new NonfairSync();
+    }
+
+    /**
+     * 获取锁，过程不可中断
+     * 本质上是线程在等待获取锁时，如果发生了线程中断，则将线程设置为中断状态不处理
      */
     public void lock() {
 
-        // 调用同步器的lock方法
         sync.lock();
     }
 
     /**
-     * 同步器，包含非公平同步器与公平同步器的
+     * 获取锁，过程可中断
+     * 本质上是线程在等待获取锁时，如果发生了线程中断，则直接抛出异常
+     */
+    public void lockInterruptibly() throws InterruptedException {
+
+        sync.acquireInterruptibly(1);
+    }
+
+    /**
+     * 获取锁，直接返回结果，失败不添加到同步队列中
+     */
+    public boolean tryLock() {
+        return sync.nonfairTryAcquire(1);
+    }
+
+    /**
+     * 获取锁，在指定时间范围内获取，过程可中断
+     * 如果在时间范围内未获取到锁会先挂起一段时间再尝试，直到超时，如果发生了线程中断，则直接抛出异常
+     */
+    public boolean tryLock(long timeout, TimeUnit unit) throws InterruptedException {
+        return sync.tryAcquireNanos(1, unit.toNanos(timeout));
+    }
+
+    /**
+     * 创建condition对象
+     */
+    public Condition newCondition() {
+        return sync.newCondition();
+    }
+
+    /**
+     * 获取state，未获取到锁的线程恒为0
+     */
+    public int getHoldCount() {
+        return sync.getHoldCount();
+    }
+
+    /**
+     * 判断锁是否已被获取
+     */
+    public boolean isLocked() {
+        return sync.isLocked();
+    }
+
+    /**
+     * 释放锁
+     */
+    public void unlock() {
+        sync.release(1);
+    }
+
+    /**
+     * 判断是否为公平锁
+     */
+    public final boolean isFair() {
+        return sync instanceof FairSync;
+    }
+
+    /**
+     * 判断是否有线程在等待锁，不准确
+     * 本质上是判断同步队列是否有线程在等待
+     */
+    public final boolean hasQueuedThreads() {
+        return sync.hasQueuedThreads();
+    }
+
+    /**
+     * 判断当前线程是不是获取到锁的线程
+     */
+    public boolean isHeldByCurrentThread() {
+        return sync.isHeldExclusively();
+    }
+
+    /**
+     * 同步队列长度，不准确
+     */
+    public final int getQueueLength() {
+        return sync.getQueueLength();
+    }
+
+    /**
+     * 同步队列线程，不准确
+     */
+    protected Collection<Thread> getQueuedThreads() {
+        return sync.getQueuedThreads();
+    }
+
+    /**
+     * 获取持有锁的线程
+     */
+    protected Thread getOwner() {
+        return sync.getOwner();
+    }
+
+    /**
+     * 获取等待队列线程，不能准
+     */
+    protected Collection<Thread> getWaitingThreads(Condition condition) {
+        if (condition == null)
+            throw new NullPointerException();
+        if (!(condition instanceof AbstractQueuedSynchronizer.ConditionObject))
+            throw new IllegalArgumentException("not owner");
+        return sync.getWaitingThreads((AbstractQueuedSynchronizer.ConditionObject) condition);
+    }
+
+    /**
+     * 判断给定线程是否在等待此锁，不准确
+     * 本质上是判断给定线程是否在同步队列中
+     */
+    public final boolean hasQueuedThread(Thread thread) {
+        return sync.isQueued(thread);
+    }
+
+    /**
+     * 同步器，包含公平锁与非公平锁的共有实现
      */
     abstract static class Sync extends AbstractQueuedSynchronizer {
         private static final long serialVersionUID = -5179523762034025860L;
 
-        // 为Lock提供访问公平同步器与非公平同步器的统一入口
+        // 方法抽象
         abstract void lock();
 
         /**
          * 非公平锁获取锁的逻辑
-         * 1、如果锁未被别的线程获取则获取锁
+         * 1、如果锁未被别的线程获取则尝试获取锁
          * 2、如果锁已被自己线程获取则state+1
-         *
-         * @param acquires 固定为1
-         * @return 获取锁的结果
          */
         final boolean nonfairTryAcquire(int acquires) {
 
@@ -66,10 +190,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         }
 
         /**
-         * 尝试发布锁，state-1，如果计算后state=0则将独占线程置为null
-         *
-         * @param releases
-         * @return
+         * 释放锁，state-1，如果计算后state=0则将独占线程置为null，说明完全释放
          */
         protected final boolean tryRelease(int releases) {
 
@@ -95,7 +216,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         }
 
         /**
-         * 实例化condition
+         * 实例化ConditionObject对象
          */
         final ConditionObject newCondition() {
             return new ConditionObject();
@@ -133,15 +254,14 @@ public class ReentrantLock implements Lock, java.io.Serializable {
     }
 
     /**
-     * 非公平同步器实现
+     * 非公平锁获取锁的逻辑
      */
     static final class NonfairSync extends Sync {
         private static final long serialVersionUID = 7316153563782823691L;
 
         /**
          * 以非公平的方式尝试获取锁
-         * 公平锁与非公平锁的区别为，我先尝试获取锁，如果获取到锁我就不添加到同步队列里边，直接执行
-         * 公平锁，我获取锁时先判断是不是有节点在等待，如果有节点在等待，我只能添加到同步队列里边
+         * 我先尝试获取锁，如果获取到锁我就不添加到同步队列里边，直接执行
          */
         final void lock() {
 
@@ -154,168 +274,13 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         }
 
         /**
-         * 尝试获取锁
-         * 1、state=0时，尝试获取锁
-         * 2、重入锁
+         * 尝试获取锁，交给sync实现
          */
         protected final boolean tryAcquire(int acquires) {
 
             // 交给sync来实现，
             return nonfairTryAcquire(acquires);
         }
-    }
-
-    /**
-     * 实例化可重入锁，并指定为非公平模式
-     */
-    public ReentrantLock() {
-        sync = new NonfairSync();
-    }
-
-    /**
-     * 实例化可重入锁，并设定公平模式
-     */
-    public ReentrantLock(boolean fair) {
-        sync = fair ? new FairSync() : new NonfairSync();
-    }
-
-    /**
-     * 公平同步器实现
-     */
-    static final class FairSync extends Sync {
-        private static final long serialVersionUID = -3000897897090466540L;
-
-        /**
-         * 以公平方式尝试获取锁
-         */
-        final void lock() {
-            acquire(1);
-        }
-
-        /**
-         * 尝试获取锁
-         */
-        protected final boolean tryAcquire(int acquires) {
-
-            final Thread current = Thread.currentThread();
-            int c = getState();
-
-            // 如果锁未被获取则执行以下逻辑
-            if (c == 0) {
-                if (!hasQueuedPredecessors() && // 没有竞争或者队列为空
-                        compareAndSetState(0, acquires)) {  // 通过一次CAS操作来尝试获取锁
-                    setExclusiveOwnerThread(current);
-                    return true;
-                }
-            } else if (current == getExclusiveOwnerThread()) {  //设置重入次数
-                int nextc = c + acquires;
-                if (nextc < 0)
-                    throw new Error("Maximum lock count exceeded");
-                setState(nextc);
-                return true;
-            }
-            return false;
-        }
-    }
-
-    /**
-     * 获取一个可被中断的锁
-     */
-    public void lockInterruptibly() throws InterruptedException {
-        sync.acquireInterruptibly(1);
-    }
-
-    /**
-     * 尝试申请一个锁，快速返回结果
-     */
-    public boolean tryLock() {
-        return sync.nonfairTryAcquire(1);
-    }
-
-    /**
-     * 尝试申请一个锁，并在指定时间范围内返回结果
-     */
-    public boolean tryLock(long timeout, TimeUnit unit) throws InterruptedException {
-        return sync.tryAcquireNanos(1, unit.toNanos(timeout));
-    }
-
-    /**
-     * 释放锁
-     */
-    public void unlock() {
-        sync.release(1);
-    }
-
-    /**
-     * 创建 condition
-     */
-    public Condition newCondition() {
-        return sync.newCondition();
-    }
-
-    /**
-     * 获取state，未获取到锁的线程恒未为0
-     */
-    public int getHoldCount() {
-        return sync.getHoldCount();
-    }
-
-    /**
-     * 判断当前线程是不是获取到锁的线程
-     */
-    public boolean isHeldByCurrentThread() {
-        return sync.isHeldExclusively();
-    }
-
-    /**
-     * 判断锁是否锁定
-     */
-    public boolean isLocked() {
-        return sync.isLocked();
-    }
-
-    /**
-     * 判断是否公平锁
-     */
-    public final boolean isFair() {
-        return sync instanceof FairSync;
-    }
-
-    /**
-     * 获取持有锁的线程
-     */
-    protected Thread getOwner() {
-        return sync.getOwner();
-    }
-
-    /**
-     * 判断是否有线程在等待锁，不准确
-     * 本质上是判断同步队列是否为空
-     */
-    public final boolean hasQueuedThreads() {
-        return sync.hasQueuedThreads();
-    }
-
-    /**
-     * 判断给定线程是否在等待此锁，不准确
-     * 本质上是判断给定线程是否在同步队列中
-     */
-    public final boolean hasQueuedThread(Thread thread) {
-        return sync.isQueued(thread);
-    }
-
-    /**
-     * 同步队列长度
-     */
-    public final int getQueueLength() {
-        return sync.getQueueLength();
-    }
-
-    /**
-     * 同步队列线程
-     */
-    protected Collection<Thread> getQueuedThreads() {
-        return sync.getQueuedThreads();
     }
 
     /**
@@ -341,14 +306,43 @@ public class ReentrantLock implements Lock, java.io.Serializable {
     }
 
     /**
-     * 获取等待队列线程
+     * 公平同步器实现
      */
-    protected Collection<Thread> getWaitingThreads(Condition condition) {
-        if (condition == null)
-            throw new NullPointerException();
-        if (!(condition instanceof AbstractQueuedSynchronizer.ConditionObject))
-            throw new IllegalArgumentException("not owner");
-        return sync.getWaitingThreads((AbstractQueuedSynchronizer.ConditionObject) condition);
+    static final class FairSync extends Sync {
+        private static final long serialVersionUID = -3000897897090466540L;
+
+        /**
+         * 以公平方式尝试获取锁
+         */
+        final void lock() {
+            acquire(1);
+        }
+
+        /**
+         * 尝试获取锁
+         * 我获取锁时先判断是不是有节点在等待，如果有节点在等待，我只能添加到同步队列里边
+         */
+        protected final boolean tryAcquire(int acquires) {
+
+            final Thread current = Thread.currentThread();
+            int c = getState();
+
+            // 如果锁未被获取则执行以下逻辑
+            if (c == 0) {
+                if (!hasQueuedPredecessors() && // 没有竞争或者队列为空
+                        compareAndSetState(0, acquires)) {  // 通过一次CAS操作来尝试获取锁
+                    setExclusiveOwnerThread(current);
+                    return true;
+                }
+            } else if (current == getExclusiveOwnerThread()) {  //设置重入次数
+                int nextc = c + acquires;
+                if (nextc < 0)
+                    throw new Error("Maximum lock count exceeded");
+                setState(nextc);
+                return true;
+            }
+            return false;
+        }
     }
 
     public String toString() {
