@@ -33,7 +33,7 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
+package com.cndevxm.concurrent.sourceAnalyize.locks;
 
 /**
  * A {@code ReadWriteLock} maintains a pair of associated {@link

@@ -1,4 +1,4 @@
-package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
+package com.cndevxm.concurrent.sourceAnalyize.locks;
 
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
@@ -261,7 +261,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
 
         /**
          * 以非公平的方式尝试获取锁
-         * 我先尝试获取锁，如果获取到锁我就不添加到同步队列里边，直接执行
+         * 我先尝试获取锁，如果获取到锁就不添加到同步队列里边，直接执行
          */
         final void lock() {
 

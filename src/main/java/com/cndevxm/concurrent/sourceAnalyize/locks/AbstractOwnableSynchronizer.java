@@ -1,7 +1,8 @@
-package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
+package com.cndevxm.concurrent.sourceAnalyize.locks;
 
 /**
- * 独占模式相关接口
+ * 独占模式抽象类
+ * 作用：set与get独占线程
  */
 public abstract class AbstractOwnableSynchronizer implements java.io.Serializable {
 

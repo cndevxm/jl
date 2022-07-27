@@ -1,4 +1,4 @@
-package com.cndevxm.concurrent.lock.locks.sourceAnalyize;
+package com.cndevxm.concurrent.sourceAnalyize.locks;
 
 import sun.misc.Unsafe;
 
